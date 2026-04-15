@@ -1,0 +1,517 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>NovelHelper</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: "Noto Serif SC", "Source Han Serif CN", Georgia, serif;
+    background: #f5f0e8;
+    color: #2c2c2c;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── 顶栏 ── */
+  #topbar {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    background: #2c2c2c;
+    color: #f5f0e8;
+    flex-shrink: 0;
+  }
+  #topbar h1 { font-size: 1rem; font-weight: 600; letter-spacing: 2px; margin-right: auto; }
+  #topbar button, #topbar label {
+    padding: 5px 14px;
+    border: 1px solid #888;
+    border-radius: 4px;
+    background: transparent;
+    color: #f5f0e8;
+    font-size: 0.85rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #topbar button:hover, #topbar label:hover { background: #444; }
+  #file-input { display: none; }
+  #upload-status { font-size: 0.8rem; color: #aaa; }
+
+  /* ── 主体 ── */
+  #main {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+  }
+
+  /* ── 左侧阅读区 ── */
+  #reader-panel {
+    flex: 0 0 58%;
+    display: flex;
+    flex-direction: column;
+    border-right: 1px solid #d0c8b8;
+    background: #fffdf8;
+  }
+
+  #chapter-nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 20px;
+    border-bottom: 1px solid #e0d8c8;
+    background: #faf7f0;
+    flex-shrink: 0;
+  }
+  #chapter-nav button {
+    padding: 4px 14px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #fff;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+  #chapter-nav button:disabled { opacity: 0.35; cursor: default; }
+  #chapter-title { font-size: 0.9rem; font-weight: 600; color: #555; max-width: 55%; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #chapter-info { font-size: 0.8rem; color: #999; }
+
+  #chapter-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 32px 60px;
+    line-height: 2;
+    font-size: 1.05rem;
+  }
+  #chapter-content p { margin-bottom: 1em; text-indent: 2em; }
+  #chapter-content h1, #chapter-content h2, #chapter-content h3 {
+    text-align: center; margin: 1.5em 0 1em; font-size: 1.1rem;
+  }
+
+  #reader-placeholder {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: #bbb;
+    gap: 12px;
+    font-size: 0.95rem;
+  }
+  #reader-placeholder svg { opacity: 0.3; }
+
+  /* 进度标记 */
+  #progress-bar-wrap {
+    padding: 6px 20px;
+    border-top: 1px solid #e0d8c8;
+    background: #faf7f0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+  }
+  #progress-bar-wrap label { font-size: 0.8rem; color: #888; white-space: nowrap; }
+  #progress-range { flex: 1; accent-color: #7a6a52; }
+  #progress-label { font-size: 0.8rem; color: #555; white-space: nowrap; min-width: 80px; }
+
+  /* ── 右侧对话区 ── */
+  #chat-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    background: #f9f6f0;
+  }
+
+  #chat-header {
+    padding: 10px 16px;
+    border-bottom: 1px solid #e0d8c8;
+    font-size: 0.85rem;
+    color: #888;
+    flex-shrink: 0;
+  }
+  #chat-header span { color: #555; font-weight: 600; }
+
+  #chat-messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+  }
+
+  .msg { display: flex; flex-direction: column; gap: 4px; max-width: 90%; }
+  .msg.user { align-self: flex-end; align-items: flex-end; }
+  .msg.assistant { align-self: flex-start; align-items: flex-start; }
+
+  .bubble {
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 0.9rem;
+    line-height: 1.7;
+    white-space: pre-wrap;
+    word-break: break-word;
+  }
+  .msg.user .bubble { background: #7a6a52; color: #fff; border-bottom-right-radius: 4px; }
+  .msg.assistant .bubble { background: #fff; border: 1px solid #e0d8c8; border-bottom-left-radius: 4px; }
+
+  .msg-meta { font-size: 0.72rem; color: #bbb; padding: 0 4px; }
+
+  /* markdown 渲染 */
+  .bubble h2, .bubble h3 { font-size: 0.95rem; margin: 0.6em 0 0.3em; }
+  .bubble ul, .bubble ol { padding-left: 1.4em; }
+  .bubble li { margin-bottom: 0.3em; }
+  .bubble table { border-collapse: collapse; font-size: 0.85rem; margin: 0.5em 0; }
+  .bubble th, .bubble td { border: 1px solid #ddd; padding: 4px 10px; }
+  .bubble th { background: #f5f0e8; }
+  .bubble blockquote { border-left: 3px solid #ccc; padding-left: 10px; color: #666; margin: 0.5em 0; }
+  .bubble code { background: #f0ece4; padding: 1px 5px; border-radius: 3px; font-size: 0.85em; }
+
+  #typing-indicator { display: none; align-self: flex-start; }
+  #typing-indicator .bubble { color: #aaa; font-style: italic; }
+
+  #chat-input-area {
+    padding: 12px 16px;
+    border-top: 1px solid #e0d8c8;
+    display: flex;
+    gap: 8px;
+    flex-shrink: 0;
+    background: #faf7f0;
+  }
+  #chat-input {
+    flex: 1;
+    padding: 8px 12px;
+    border: 1px solid #ccc;
+    border-radius: 8px;
+    font-family: inherit;
+    font-size: 0.9rem;
+    resize: none;
+    background: #fff;
+    line-height: 1.5;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  #chat-input:focus { outline: none; border-color: #7a6a52; }
+  #send-btn {
+    padding: 8px 18px;
+    background: #7a6a52;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 0.9rem;
+    align-self: flex-end;
+  }
+  #send-btn:disabled { opacity: 0.5; cursor: default; }
+  #send-btn:hover:not(:disabled) { background: #5e5040; }
+
+  /* 章节选择下拉 */
+  #chapter-select-wrap { display: flex; align-items: center; gap: 6px; }
+  #chapter-select { border: 1px solid #888; border-radius: 4px; background: #2c2c2c; color: #f5f0e8; padding: 4px 6px; font-size: 0.8rem; max-width: 140px; }
+</style>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div id="topbar">
+  <h1>📖 NovelHelper</h1>
+  <div id="chapter-select-wrap">
+    <select id="chapter-select" title="跳转章节"><option value="">-- 选择章节 --</option></select>
+  </div>
+  <label for="file-input">上传 EPUB</label>
+  <input type="file" id="file-input" accept=".epub">
+  <span id="upload-status"></span>
+</div>
+
+<!-- 主体 -->
+<div id="main">
+
+  <!-- 左：阅读区 -->
+  <div id="reader-panel">
+    <div id="chapter-nav">
+      <button id="prev-btn" disabled>← 上一章</button>
+      <span id="chapter-title">请上传 EPUB</span>
+      <span id="chapter-info"></span>
+      <button id="next-btn" disabled>下一章 →</button>
+    </div>
+
+    <div id="chapter-content">
+      <div id="reader-placeholder">
+        <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+          <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+        </svg>
+        上传 EPUB 开始阅读
+      </div>
+    </div>
+
+    <div id="progress-bar-wrap">
+      <label>阅读进度（用于剧透控制）：</label>
+      <input type="range" id="progress-range" min="0" max="0" value="0">
+      <span id="progress-label">未设定</span>
+    </div>
+  </div>
+
+  <!-- 右：对话区 -->
+  <div id="chat-panel">
+    <div id="chat-header">阅读向导 · 当前读到：<span id="current-chapter-label">—</span></div>
+    <div id="chat-messages">
+      <div class="msg assistant">
+        <div class="bubble">你好！上传 EPUB 后，你可以随时向我提问关于书中角色、情节的问题。我只会根据你已读的章节来回答，不会透露后续剧情。</div>
+      </div>
+      <div class="msg assistant" id="typing-indicator">
+        <div class="bubble">思考中…</div>
+      </div>
+    </div>
+    <div id="chat-input-area">
+      <textarea id="chat-input" rows="2" placeholder="提问关于书中的内容…" disabled></textarea>
+      <button id="send-btn" disabled>发送</button>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ── 状态 ──────────────────────────────────────────────────────────────────────
+const state = {
+  bookId: null,
+  chapters: [],
+  currentChapter: 0,    // 当前阅读章节（剧透控制基准）
+  displayChapter: 0,    // 当前显示章节（翻页用）
+  history: [],          // 对话历史 [{role, content}]
+};
+
+// ── DOM ───────────────────────────────────────────────────────────────────────
+const $ = id => document.getElementById(id);
+const fileInput     = $('file-input');
+const uploadStatus  = $('upload-status');
+const prevBtn       = $('prev-btn');
+const nextBtn       = $('next-btn');
+const chapterTitle  = $('chapter-title');
+const chapterInfo   = $('chapter-info');
+const chapterContent= $('chapter-content');
+const progressRange = $('progress-range');
+const progressLabel = $('progress-label');
+const currentChapterLabel = $('current-chapter-label');
+const chapterSelect = $('chapter-select');
+const chatMessages  = $('chat-messages');
+const chatInput     = $('chat-input');
+const sendBtn       = $('send-btn');
+const typingIndicator = $('typing-indicator');
+
+// ── 上传 EPUB ─────────────────────────────────────────────────────────────────
+fileInput.addEventListener('change', async () => {
+  const file = fileInput.files[0];
+  if (!file) return;
+
+  // book_id = 文件名去扩展名
+  state.bookId = file.name.replace(/\.epub$/i, '').replace(/\s+/g, '_');
+  uploadStatus.textContent = '处理中…';
+
+  const form = new FormData();
+  form.append('file', file);
+
+  try {
+    const res = await fetch(`/books/${encodeURIComponent(state.bookId)}/upload`, {
+      method: 'POST', body: form,
+    });
+    if (!res.ok) throw new Error(await res.text());
+    const data = await res.json();
+    uploadStatus.textContent = `✓ ${data.chapters} 章 / ${data.chunks} 块`;
+    await loadChapters();
+  } catch (e) {
+    uploadStatus.textContent = '上传失败：' + e.message;
+  }
+});
+
+async function loadChapters() {
+  const res = await fetch(`/books/${encodeURIComponent(state.bookId)}/chapters`);
+  state.chapters = await res.json();
+
+  // 填充下拉
+  chapterSelect.innerHTML = '<option value="">-- 跳转章节 --</option>';
+  state.chapters.forEach(ch => {
+    const opt = document.createElement('option');
+    opt.value = ch.index;
+    opt.textContent = ch.title;
+    chapterSelect.appendChild(opt);
+  });
+
+  // 进度条
+  progressRange.max = state.chapters.length - 1;
+  progressRange.value = 0;
+
+  // 启用对话
+  chatInput.disabled = false;
+  sendBtn.disabled = false;
+
+  await showChapter(0);
+  setCurrentChapter(0);
+}
+
+// ── 章节显示 ──────────────────────────────────────────────────────────────────
+async function showChapter(index) {
+  if (!state.bookId || index < 0 || index >= state.chapters.length) return;
+  state.displayChapter = index;
+
+  const ch = state.chapters[index];
+  chapterTitle.textContent = ch.title;
+  chapterInfo.textContent = `${index + 1} / ${state.chapters.length}`;
+  chapterSelect.value = index;
+
+  prevBtn.disabled = index === 0;
+  nextBtn.disabled = index === state.chapters.length - 1;
+
+  chapterContent.innerHTML = '<p style="color:#aaa;text-align:center">加载中…</p>';
+
+  const res = await fetch(`/books/${encodeURIComponent(state.bookId)}/chapters/${index}/html`);
+  const data = await res.json();
+
+  // 用 srcdoc iframe 隔离 epub css，不污染主页
+  const iframe = document.createElement('iframe');
+  iframe.style.cssText = 'width:100%;border:none;flex:1;';
+  iframe.srcdoc = `<html><head><meta charset="utf-8">
+    <style>body{font-family:"Noto Serif SC",Georgia,serif;font-size:1rem;line-height:2;
+    padding:0 20px 40px;color:#2c2c2c;}
+    p{text-indent:2em;margin-bottom:0.8em;}
+    h1,h2,h3{text-align:center;margin:1.5em 0 1em;}
+    img{max-width:100%}
+    </style></head><body>${data.html}</body></html>`;
+
+  chapterContent.innerHTML = '';
+  chapterContent.style.padding = '0';
+  chapterContent.style.display = 'flex';
+  iframe.style.height = '100%';
+  chapterContent.appendChild(iframe);
+
+  // 如果翻到的章节超过当前阅读进度，自动更新进度
+  if (index > state.currentChapter) {
+    setCurrentChapter(index);
+  }
+}
+
+prevBtn.addEventListener('click', () => showChapter(state.displayChapter - 1));
+nextBtn.addEventListener('click', () => showChapter(state.displayChapter + 1));
+chapterSelect.addEventListener('change', () => {
+  const v = parseInt(chapterSelect.value);
+  if (!isNaN(v)) showChapter(v);
+});
+
+// ── 阅读进度（剧透控制）────────────────────────────────────────────────────────
+function setCurrentChapter(index) {
+  state.currentChapter = index;
+  progressRange.value = index;
+  const title = state.chapters[index]?.title ?? `第${index+1}章`;
+  progressLabel.textContent = `${title}`;
+  currentChapterLabel.textContent = title;
+
+  // 同步到后端
+  if (state.bookId) {
+    fetch(`/books/${encodeURIComponent(state.bookId)}/progress`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({current_chapter: index}),
+    });
+  }
+}
+
+progressRange.addEventListener('input', () => {
+  setCurrentChapter(parseInt(progressRange.value));
+});
+
+// ── 对话 ──────────────────────────────────────────────────────────────────────
+function appendMessage(role, text) {
+  const div = document.createElement('div');
+  div.className = `msg ${role}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = role === 'assistant' ? simpleMarkdown(text) : escapeHtml(text);
+  div.appendChild(bubble);
+  chatMessages.insertBefore(div, typingIndicator);
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+  return bubble;
+}
+
+async function sendMessage() {
+  const query = chatInput.value.trim();
+  if (!query || !state.bookId) return;
+
+  chatInput.value = '';
+  chatInput.style.height = 'auto';
+  sendBtn.disabled = true;
+
+  appendMessage('user', query);
+
+  // 显示 typing
+  typingIndicator.style.display = 'flex';
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+
+  try {
+    const res = await fetch(`/books/${encodeURIComponent(state.bookId)}/chat`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        query,
+        current_chapter: state.currentChapter,
+        history: state.history,
+      }),
+    });
+    const data = await res.json();
+    const reply = data.reply ?? data.detail ?? '（无回复）';
+
+    typingIndicator.style.display = 'none';
+    appendMessage('assistant', reply);
+
+    // 更新历史（传给 API 的是纯问题，不含 RAG context）
+    state.history.push({role: 'user', content: query});
+    state.history.push({role: 'assistant', content: reply});
+  } catch (e) {
+    typingIndicator.style.display = 'none';
+    appendMessage('assistant', '请求失败：' + e.message);
+  } finally {
+    sendBtn.disabled = false;
+    chatInput.focus();
+  }
+}
+
+sendBtn.addEventListener('click', sendMessage);
+chatInput.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+});
+chatInput.addEventListener('input', () => {
+  chatInput.style.height = 'auto';
+  chatInput.style.height = Math.min(chatInput.scrollHeight, 120) + 'px';
+});
+
+// ── 工具函数 ──────────────────────────────────────────────────────────────────
+function escapeHtml(t) {
+  return t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function simpleMarkdown(text) {
+  // 极简 markdown：加粗、斜体、标题、列表、表格、blockquote、code
+  let html = escapeHtml(text);
+  html = html
+    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.+?)\*/g, '<em>$1</em>')
+    .replace(/`(.+?)`/g, '<code>$1</code>')
+    .replace(/^&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/^\| (.+) \|$/gm, row => {
+      const cells = row.split('|').slice(1,-1).map(c => c.trim());
+      return '<tr>' + cells.map(c => `<td>${c}</td>`).join('') + '</tr>';
+    })
+    .replace(/(<tr>.*<\/tr>\n?)+/gs, m => `<table>${m}</table>`)
+    .replace(/^- (.+)$/gm, '<li>$1</li>')
+    .replace(/(<li>.*<\/li>\n?)+/gs, m => `<ul>${m}</ul>`)
+    .replace(/\n\n/g, '</p><p>')
+    .replace(/\n/g, '<br>');
+  return `<p>${html}</p>`;
+}
+</script>
+</body>
+</html>

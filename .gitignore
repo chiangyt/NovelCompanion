@@ -1,0 +1,31 @@
+# API Key
+api_key.env
+
+# 向量数据库
+data/
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# 模型缓存
+.cache/
+
+# EPUB 书籍文件
+*.epub
+
+# 编辑器
+.vscode/
+.history/
+.claude/
+
+# 评估产物
+ragas_results.csv
+plan.md
+
+# 系统
+.DS_Store
+Thumbs.db
