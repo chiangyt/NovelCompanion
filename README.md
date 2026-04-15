@@ -53,7 +53,6 @@ novelhelper/
 ├── run.py                  # 启动入口
 ├── eval.py                 # 评估脚本（实验性，不作为项目功能）
 ├── requirements.txt
-├── api_key.env             # API Key（不入库）
 ├── frontend/
 │   └── index.html          # 前端单页应用
 ├── src/
