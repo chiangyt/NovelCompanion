@@ -38,8 +38,6 @@ TAVILY_API_KEY=your_tavily_api_key
 python run.py
 ```
 
-打开浏览器访问 **http://127.0.0.1:8000**
-
 ## 使用
 
 1. 点击顶栏「上传 EPUB」选择文件，等待处理完成（GPU 约 20 秒）
