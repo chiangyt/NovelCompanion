@@ -1,4 +1,4 @@
-# NovelHelper
+# NovelCompanion
 
 中文小说陪伴式阅读工具。上传 EPUB，随时向 AI 提问书中内容，设置阅读进度后自动避免剧透。
 
