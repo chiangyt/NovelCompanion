@@ -19,17 +19,17 @@ from ..rag.vector_store import search
 MODEL = "qwen-plus"
 QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 MAX_HISTORY_TURNS = 6   # 保留最近 N 轮（1 轮 = 1 user + 1 assistant）
-tavily_client = TavilyClient(api_key=os.environ.get("TAVILY_API_KEY"))
+_tavily_api_key = os.environ.get("TAVILY_API_KEY")
+tavily_client = TavilyClient(api_key=_tavily_api_key) if _tavily_api_key else None
 
 SYSTEM_PROMPT = """你是一位专业的小说阅读向导，帮助读者更好地理解正在阅读的小说。
-
 你的职责：
 - 基于书中内容回答读者的问题（角色、情节、背景等）
 - 只使用读者已读章节的内容，绝对不透露未读部分的剧情
 - 回答要简洁、准确，引用原文时注明出自哪一章，不要擅自推测人物性格或故事走向
 - 如果已读章节中找不到答案，诚实告知，不要猜测或编造
-
-每次回答前，你会收到从书中检索到的相关段落作为参考。请优先基于这些段落作答。"""
+每次回答前，你会收到从书中检索到的相关段落作为参考。请优先基于这些段落作答。
+如果书中检索到的内容无法直接回答用户的问题（例如只是顺带提及、缺乏具体信息），联网搜索后补充到回答中。"""
 
 
 def make_search_book_tool(book_id: str, current_chapter: int):
@@ -52,14 +52,19 @@ def internet_search(
     max_results: int = 5,
     topic: Literal["general", "news", "finance"] = "general",
     include_raw_content: bool = False,
-) -> dict:
+) -> str | dict:
     """搜索互联网，适合查询作者背景、历史背景、现实世界知识等书中不包含的信息"""
-    return tavily_client.search(
-        query,
-        max_results=max_results,
-        include_raw_content=include_raw_content,
-        topic=topic,
-    )
+    if tavily_client is None:
+        return "互联网搜索不可用，请直接用你自己的知识回答。"
+    try:
+        return tavily_client.search(
+            query,
+            max_results=max_results,
+            include_raw_content=include_raw_content,
+            topic=topic,
+        )
+    except Exception as e:
+        return f"搜索失败（{e}），请直接用你自己的知识回答。"
 
 
 def chat(

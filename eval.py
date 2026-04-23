@@ -21,10 +21,10 @@ from src.parser.chunker import chunk_chapters
 from src.rag.vector_store import ingest_chunks, search
 from src.chat.assistant import chat
 
-
+from openai import OpenAI
 from ragas import evaluate
-from ragas.metrics import faithfulness, answer_relevancy
-from ragas.llms import LangchainLLMWrapper
+from ragas.metrics import faithfulness, AnswerRelevancy
+from ragas.llms import llm_factory
 from ragas.embeddings import LangchainEmbeddingsWrapper
 from langchain_openai import ChatOpenAI
 from datasets import Dataset
@@ -36,15 +36,15 @@ QWEN_BASE_URL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
 
 EPUB_PATH = Path("玛普尔小姐1　谋杀启事.epub")
 CURRENT_CHAPTER = 999      # 限制检索章节范围，999 = 不限制
-SKIP_INDEX = False         # 已入库时改为 True 跳过建索引
+SKIP_INDEX = True         # 已入库时改为 True 跳过建索引
 OUTPUT = "ragas_results.csv"
 
 # ── 测试问题 ──────────────────────────────────────────────────────────────────
 
 QUESTIONS = [
     # 正常检索
-    "主要角色有哪些？",
     "埃德蒙和斯威腾汉姆太太是什么关系？",
+    "被害者是谁？",
     "谋杀案会发生在哪里？",
     "小围场的主人是谁？",
     "这个故事发生在哪个时代？",
@@ -55,15 +55,11 @@ QUESTIONS = [
     "不完美的完美，冷冰冰的匀称，光辉灿烂的徒劳。这个句子出自哪个作品？",
     "埃德蒙·斯威腾汉姆戴眼镜吗？",
     "米琪做的特色蛋糕具体是什么特色？",
-
+    "谁偷了警督的枪？",
     # 应该找不到答案（书中未提及）
     "马普尔小姐的身高是多少？",
 
-    # 触发网络搜索（书外知识）
-    "这本书的作者是谁，有什么代表作？",
 ]
-
-
 
 def _safe_id(name: str) -> str:
     return "bk_" + hashlib.md5(name.encode()).hexdigest()[:16]
@@ -108,24 +104,27 @@ class LocalEmbeddings:
 
 def run_ragas(dataset: list[dict]):
 
-    llm = LangchainLLMWrapper(ChatOpenAI(
+    client = OpenAI(
         api_key=os.environ.get("QWEN_API_KEY"),
-        base_url=QWEN_BASE_URL,
-        model=MODEL,
-    ))
+        base_url=QWEN_BASE_URL)
+    
+    llm = llm_factory(MODEL,client=client)
     
     embeddings = LangchainEmbeddingsWrapper(LocalEmbeddings())
 
-    faithfulness.llm = llm
-    answer_relevancy.llm = llm
-    answer_relevancy.embeddings = embeddings
-
+    
+    answer_relevancy = AnswerRelevancy(llm=llm, embeddings=embeddings, strictness=1)
+    metrics=[faithfulness, answer_relevancy]
+    
     ds = Dataset.from_list(dataset)
-    return evaluate(ds, metrics=[faithfulness, answer_relevancy])
+    return evaluate(ds, metrics)
+
+
+
 
 
 def llm_as_judge(dataset: list[dict]) -> list[dict]:
-    """用独立 LLM 判断 answer 是否 faithful / relevant，作为对 RAGAS 的补充验证。"""
+    """用不同于生成答案的 LLM 来做评审，给每个答案打分并说明理由。"""
     from langchain_core.messages import HumanMessage, SystemMessage
 
     SYSTEM_PROMPT = """你是一个严谨的读者，正在评估一个答案是否符合书中内容。
@@ -166,13 +165,13 @@ if __name__ == "__main__":
     dataset = collect_dataset(book_id, CURRENT_CHAPTER)
 
     print("\n运行 RAGAS 评估...")
-    #result = run_ragas(dataset)
+    result = run_ragas(dataset)
 
-    result = llm_as_judge(dataset)
+    #result = llm_as_judge(dataset)
     print("\n── 评估结果 ──────────────────────")
     print(result)
 
-    #df = result.to_pandas()
-    df = Dataset.from_list(result).to_pandas()
-    df.to_csv(OUTPUT, index=False, encoding="utf-8-sig")
+    df = result.to_pandas()
+    #df = Dataset.from_list(result).to_pandas()
+    #df.to_csv(OUTPUT, index=False, encoding="utf-8-sig")
     print(f"\n详细结果已保存到 {OUTPUT}")
